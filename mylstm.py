@@ -1,4 +1,4 @@
-from __future__ import division, print_function, absolute_import
+# from __future__ import division, print_function, absolute_import
 import numpy as np
 import tflearn
 from tflearn.data_utils import to_categorical, pad_sequences
@@ -8,14 +8,17 @@ import mydata as data
 import tensorflow as tf
 
 def build_model(max_features, maxlen):
-		net = tflearn.input_data(shape=[None,73])
+		net = tflearn.input_data(shape=[None,maxlen])
 		
 		
-		net = tflearn.embedding(net, input_dim=73, output_dim=128)
+		net = tflearn.embedding(net, input_dim=maxlen, output_dim=512)
 		
-		net = tflearn.lstm(net, 128, dropout=0.8)
+		net = tflearn.lstm(net, 128, dropout=0.5)
+		net = tflearn.dropout(net, 0.5)
 		
 		net = tflearn.fully_connected(net, 1, activation='sigmoid')
+
+		
 		
 		net = tflearn.regression(net, optimizer='rmsprop', learning_rate=0.001,
 		loss='binary_crossentropy')
@@ -26,7 +29,7 @@ def build_model(max_features, maxlen):
 		return model
 
 
-def run(max_epoch=25, nfolds=10, batch_size=16):
+def run(max_epoch=25, nfolds=10, batch_size=128):
 		"""Run train/test on logistic regression model"""
 		indata = data.get_data()
 		np.random.shuffle(indata)
@@ -39,43 +42,44 @@ def run(max_epoch=25, nfolds=10, batch_size=16):
 
 		max_features = len(valid_chars) + 1
 		maxlen = np.max([len(x) for x in X])
-		X = X[:14000]
-		labels = labels[:14000]
+		X = X[:2000]
+		labels = labels[:2000]
 		
 		# Convert characters to int and pad
 		X = [[valid_chars[y] for y in x] for x in X]
-		X = pad_sequences(X, maxlen=maxlen)
+		X = pad_sequences(X, maxlen=maxlen,value=0.)
 
 		# Convert labels to 0-1
 		y = [0 if x == 'benign' else 1 for x in labels]
 
-		X_train = X[:10000]
-		y_train = y[:10000]
-		X_test  = X[12000:14000]
-		y_test  = y[12000:14000]
-		y_train = np.array(y_train)
-		y_train = np.expand_dims(y_train, axis=-1)
-		y_test = np.expand_dims(y_test, axis=-1)
-		print('X_train shape')
-		print (X_train.shape)
-		print ('Y_trina shape')
-		print (len(y_train))
-	    
+		# X_train = X[:10000]
+		# y_train = y[:10000]
+		# X_test  = X[1000:2000]
+		# y_test  = y[1000:2000]
+		# y_train = np.array(y_train)
+		
+		
+		
 		
 
 
 
-		print('Build model...')
-		model = build_model(max_features, maxlen)
+		
+		for fold in range(nfolds):
+			print "fold %u/%u" % (fold+1, nfolds)
+			X_train, X_test, y_train, y_test, _, label_test = train_test_split(X, y, labels, 
+			                                                                   test_size=0.2)
 
-		print("Train...")
-		model.fit(X_train, y_train, batch_size=batch_size, show_metric=True,n_epoch=3,validation_set=(X_test,y_test))
-		print("Predicting")
-		y_pred = model.predict(X_test)
-		y_pred = np.array(y_pred)
-		y_test = np.array(y_test)
-		# tf.contrib.metrics.accuracy(y_pred, y_test, weights=None)
+			y_train = np.expand_dims(y_train, axis=-1)
+			y_test = np.expand_dims(y_test, axis=-1)
+			print 'Build model...'
+			model = build_model(max_features, maxlen)
 
-if __name__ == '__main__':
-	run()
-			   
+			print "Train..."
+
+			for ep in range(max_epoch):
+				model.fit(X_train, y_train, batch_size=batch_size, n_epoch=1,show_metric=True)
+
+				score = model.evaluate(X_test, y_test)
+				print('Test accuarcy: %0.4f%%' % (score[0] * 100))		
+
